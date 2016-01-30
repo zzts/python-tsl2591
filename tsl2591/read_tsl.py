@@ -102,7 +102,9 @@ class Tsl2591(object):
 
     def calculate_lux(self, full, ir):
         # Check for overflow conditions first
-        if (full == 0xFFFF) | (ir == 0xFFFF):
+        ovrflow_test = 0xFFFF if (self.integration_time != INTEGRATIONTIME_100MS) \
+        else 0x9400 # if integration time is 100 ms it overflows at 37888 per data sheet
+        if (full == ovrflow_test) | (ir == ovrflow_test):
             return 0
             
         case_integ = {
