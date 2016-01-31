@@ -17,7 +17,7 @@ INFRARED = 1  # channel 1
 FULLSPECTRUM = 0  # channel 0
 
 ADDR = 0x29
-READBIT = 0x01
+
 COMMAND_BIT = 0xA0  # bits 7 and 5 for 'command normal'
 CLEAR_BIT = 0x40  # Clears any pending interrupt (write 1 to clear)
 WORD_BIT = 0x20  # 1 = read/write word (rather than byte)
@@ -62,7 +62,7 @@ class Tsl2591(object):
     def __init__(
                  self,
                  i2c_bus=1,
-                 sensor_address=0x29,
+                 sensor_address=ADDR,
                  integration=INTEGRATIONTIME_100MS,
                  gain=GAIN_LOW
                  ):
