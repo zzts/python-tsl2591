@@ -34,17 +34,26 @@ LUX_COEFD = 0.86  # CH2 coefficient B
 
 REGISTER_ENABLE = 0x00
 REGISTER_CONTROL = 0x01
-REGISTER_THRESHHOLDL_LOW = 0x02
-REGISTER_THRESHHOLDL_HIGH = 0x03
-REGISTER_THRESHHOLDH_LOW = 0x04
-REGISTER_THRESHHOLDH_HIGH = 0x05
-REGISTER_INTERRUPT = 0x06
-REGISTER_CRC = 0x08
-REGISTER_ID = 0x0A
+# interrupt thresholds
+REGISTER_THRESHHOLDL_LOW = 0x04 # AILTL
+REGISTER_THRESHHOLDL_HIGH = 0x05 # AILTH
+REGISTER_THRESHHOLDH_LOW = 0x06 # AIHTL
+REGISTER_THRESHHOLDH_HIGH = 0x07 # AIHTH
+REGISTER_NOPERSIST_THRESHOLDL_LOW = 0x08 # NPAILTL
+REGISTER_NOPERSIST_THRESHOLDL_HIGH = 0x09 # NPAILTH
+REGISTER_NOPERSIST_THRESHOLDH_LOW = 0x0A # NPAIHTL
+REGISTER_NOPERSIST_THRESHOLDH_HIGH = 0x0B # NPAIHTH
+REGISTER_PERSIST = 0x0C
+
+REGISTER_PID = 0x11
+REGISTER_ID = 0x12
+REGISTER_STATUS = 0x13
+
 REGISTER_CHAN0_LOW = 0x14
 REGISTER_CHAN0_HIGH = 0x15
 REGISTER_CHAN1_LOW = 0x16
 REGISTER_CHAN1_HIGH = 0x17
+
 INTEGRATIONTIME_100MS = 0x00
 INTEGRATIONTIME_200MS = 0x01
 INTEGRATIONTIME_300MS = 0x02
@@ -67,7 +76,7 @@ class Tsl2591(object):
                  gain=GAIN_LOW
                  ):
         self.bus = smbus.SMBus(i2c_bus)
-        self.sendor_address = sensor_address
+        self.sensor_address = sensor_address
         self.integration_time = integration
         self.gain = gain
         self.set_timing(self.integration_time)
@@ -78,20 +87,39 @@ class Tsl2591(object):
         self.enable()
         self.integration_time = integration
         self.bus.write_byte_data(
-                    self.sendor_address,
+                    self.sensor_address,
                     COMMAND_BIT | REGISTER_CONTROL,
                     self.integration_time | self.gain
                     )
         self.disable()
 
+    def read_byte_register(self,register):
+        return self.bus.read_byte_data(
+            self.sensor_address, COMMAND_BIT | register)
+
+    def write_byte_register(self,register,data):
+        return self.bus.write_byte_data(
+            self.sensor_address, COMMAND_BIT | register, data)
+
+    def read_word_register(self,register):
+        return self.bus.read_word_data(
+            self.sensor_address, COMMAND_BIT | register)
+
+    def write_word_register(self, register,data):
+        return self.bus.write_word_data(
+            self.sensor_address, COMMAND_BIT | register, data)
+
     def get_timing(self):
         return self.integration_time
+
+    def read_timing(self):
+        return self.read_byte_register(REGISTER_CONTROL)
 
     def set_gain(self, gain):
         self.enable()
         self.gain = gain
         self.bus.write_byte_data(
-                    self.sendor_address,
+                    self.sensor_address,
                     COMMAND_BIT | REGISTER_CONTROL,
                     self.integration_time | self.gain
                     )
@@ -143,14 +171,14 @@ class Tsl2591(object):
 
     def enable(self):
         self.bus.write_byte_data(
-                    self.sendor_address,
+                    self.sensor_address,
                     COMMAND_BIT | REGISTER_ENABLE,
                     ENABLE_POWERON | ENABLE_AEN | ENABLE_AIEN
                     )  # Enable
 
     def disable(self):
         self.bus.write_byte_data(
-                    self.sendor_address,
+                    self.sensor_address,
                     COMMAND_BIT | REGISTER_ENABLE,
                     ENABLE_POWEROFF
                     )
@@ -159,10 +187,10 @@ class Tsl2591(object):
         self.enable()
         time.sleep(0.120*self.integration_time+1)  # not sure if we need it "// Wait x ms for ADC to complete"
         ir = self.bus.read_word_data(
-                    self.sendor_address, COMMAND_BIT | REGISTER_CHAN1_LOW
+                    self.sensor_address, COMMAND_BIT | REGISTER_CHAN1_LOW
                     )
         full = self.bus.read_word_data(
-                    self.sendor_address, COMMAND_BIT | REGISTER_CHAN0_LOW
+                    self.sensor_address, COMMAND_BIT | REGISTER_CHAN0_LOW
                     )
         self.disable()
         return full, ir
