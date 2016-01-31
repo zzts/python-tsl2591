@@ -43,11 +43,11 @@ REGISTER_NOPERSIST_THRESHOLDL_LOW = 0x08 # NPAILTL
 REGISTER_NOPERSIST_THRESHOLDL_HIGH = 0x09 # NPAILTH
 REGISTER_NOPERSIST_THRESHOLDH_LOW = 0x0A # NPAIHTL
 REGISTER_NOPERSIST_THRESHOLDH_HIGH = 0x0B # NPAIHTH
-REGISTER_PERSIST = 0x0C
+REGISTER_PERSIST_FILTER = 0x0C # # of succesive reading to trigger interrupt
 
 REGISTER_PID = 0x11
 REGISTER_ID = 0x12
-REGISTER_STATUS = 0x13
+REGISTER_STATUS = 0x13 # interrupt and integration status
 
 REGISTER_CHAN0_LOW = 0x14
 REGISTER_CHAN0_HIGH = 0x15
@@ -98,22 +98,20 @@ class Tsl2591(object):
             self.sensor_address, COMMAND_BIT | register)
 
     def write_byte_register(self,register,data):
-        return self.bus.write_byte_data(
-            self.sensor_address, COMMAND_BIT | register, data)
+        self.bus.write_byte_data(self.sensor_address, COMMAND_BIT | register, data)
 
     def read_word_register(self,register):
         return self.bus.read_word_data(
             self.sensor_address, COMMAND_BIT | register)
 
     def write_word_register(self, register,data):
-        return self.bus.write_word_data(
-            self.sensor_address, COMMAND_BIT | register, data)
+        self.bus.write_word_data(self.sensor_address, COMMAND_BIT | register, data)
 
     def get_timing(self):
         return self.integration_time
 
     def read_timing(self):
-        return self.read_byte_register(REGISTER_CONTROL)
+        return self.read_byte_register(REGISTER_CONTROL) & 0b111
 
     def set_gain(self, gain):
         self.enable()
@@ -173,8 +171,7 @@ class Tsl2591(object):
         self.bus.write_byte_data(
                     self.sensor_address,
                     COMMAND_BIT | REGISTER_ENABLE,
-                    ENABLE_POWERON | ENABLE_AEN | ENABLE_AIEN
-                    )  # Enable
+                    ENABLE_POWERON | ENABLE_AEN )  # Enable
 
     def disable(self):
         self.bus.write_byte_data(
