@@ -19,31 +19,42 @@ FULLSPECTRUM = 0  # channel 0
 ADDR = 0x29
 
 COMMAND_BIT = 0xA0  # bits 7 and 5 for 'command normal'
-CLEAR_BIT = 0x40  # Clears any pending interrupt (write 1 to clear)
+SPECIAL_FUNCTION = 0xE0 # bits 7-5 for special function ie interupt control
+# special function flags
+FORCE_INT = 0x04 # forces an interrupt
+CLEAR_ALS_INT = 0x06  # Clears any pending ALS interrupt (write 1 to clear)
+CLEAR_INTS = 0x07 # Clears and pending ALS and No Persit interrupts
+CLEAR_NPALS_INT = 0x0A # Clear any pending No Persit interrupts
+
 WORD_BIT = 0x20  # 1 = read/write word (rather than byte)
 BLOCK_BIT = 0x10  # 1 = using block read/write
+
 ENABLE_POWERON = 0x01
 ENABLE_POWEROFF = 0x00
-ENABLE_AEN = 0x02
-ENABLE_AIEN = 0x10
-CONTROL_RESET = 0x80
+ENABLE_AEN = 0x02 # ALS enable
+ENABLE_AIEN = 0x10 # ALS interrupt uses persist filter
+ENABLE_SAI = 0x40 # Sleep after interrupt
+ENABLE_NPIEN = 0x80 # No Persist Interrupt enable
+
 LUX_DF = 408.0
 LUX_COEFB = 1.64  # CH0 coefficient
 LUX_COEFC = 0.59  # CH1 coefficient A
 LUX_COEFD = 0.86  # CH2 coefficient B
 
 REGISTER_ENABLE = 0x00
-REGISTER_CONTROL = 0x01
-# interrupt thresholds
-REGISTER_THRESHHOLDL_LOW = 0x04 # AILTL
-REGISTER_THRESHHOLDL_HIGH = 0x05 # AILTH
-REGISTER_THRESHHOLDH_LOW = 0x06 # AIHTL
-REGISTER_THRESHHOLDH_HIGH = 0x07 # AIHTH
-REGISTER_NOPERSIST_THRESHOLDL_LOW = 0x08 # NPAILTL
-REGISTER_NOPERSIST_THRESHOLDL_HIGH = 0x09 # NPAILTH
-REGISTER_NOPERSIST_THRESHOLDH_LOW = 0x0A # NPAIHTL
-REGISTER_NOPERSIST_THRESHOLDH_HIGH = 0x0B # NPAIHTH
-REGISTER_PERSIST_FILTER = 0x0C # # of succesive reading to trigger interrupt
+REGISTER_CONTROL = 0x01 # also called CONFIG
+
+# interrupt thresholds 16 bit values
+REGISTER_AILTL = 0x04 # ALS Interrupt Low Threshhold Low byte with persistence filter
+REGISTER_AILTH = 0x05 # ALS Interrupt Low Threshhold high byte with persistence filter
+REGISTER_AIHTL = 0x06 # ALS Interrupt High Threshhold with persistence filter low byte
+REGISTER_AIHTH = 0x07 # ALS Interrupt High Threshhold with persistence filter high byte
+REGISTER_NPAILTL = 0x08 # No Persistence ALS Interrupt Low Threshold low byte
+REGISTER_NPAILTH = 0x09 # No Persistence ALS Interrupt Low Threshold high byte
+REGISTER_NPAIHTL = 0x0A # No Persistence ALS Interrupt High Threshold low byte
+REGISTER_NPAIHTH = 0x0B # No Persistence ALS Interrupt High Threshold high byte
+# # of succesive reading to trigger interrupt
+REGISTER_PERSIST_FILTER = 0x0C # 8 bit register
 
 REGISTER_PID = 0x11
 REGISTER_ID = 0x12
@@ -53,6 +64,9 @@ REGISTER_CHAN0_LOW = 0x14
 REGISTER_CHAN0_HIGH = 0x15
 REGISTER_CHAN1_LOW = 0x16
 REGISTER_CHAN1_HIGH = 0x17
+
+# CONTROL flags
+DEVICE_SRESET = 0x80 # system reset
 
 INTEGRATIONTIME_100MS = 0x00
 INTEGRATIONTIME_200MS = 0x01
@@ -106,6 +120,28 @@ class Tsl2591(object):
 
     def write_word_register(self, register,data):
         self.bus.write_word_data(self.sensor_address, COMMAND_BIT | register, data)
+
+    def dump_regs(self): # dump short list of registers
+        print("Enable = %i   CONTROL(CONFIG) = %i" % (self.read_byte_register(
+            REGISTER_ENABLE), self.read_byte_register(REGISTER_CONTROL)))
+        print("Status register = %i" % self.read_byte_register(REGISTER_STATUS))
+        print("Chan 0 = % i   Chan 1 = %i \n" % (self.read_word_register(REGISTER_CHAN0_LOW),
+                                              self.read_word_register(REGISTER_CHAN1_LOW)))
+        
+    def full_dump_regs(self):  # dump registers
+        print("Enable = %i   CONTROL(CONFIG) = %i" % (self.read_byte_register(
+            REGISTER_ENABLE), self.read_byte_register(REGISTER_CONTROL)))
+        print("Threshold Registers:")
+        print("AILT = %i   AIHT = %i" % (self.read_word_register(REGISTER_AILTL),
+                                         self.read_word_register(REGISTER_AIHTL)))
+        print("NAILT = %i NAIHT = %i" % (self.read_word_register(REGISTER_NPAILTL),
+                                         self.read_word_register(REGISTER_NPAIHTL)))
+        print("Persistenc Filter = %i" % self.read_byte_register(REGISTER_PERSIST_FILTER))
+        print("Package ID = %i Device ID = %i" % (self.read_byte_register(REGISTER_PID),
+                                    self.read_byte_register(REGISTER_ID)))
+        print("Status register = %i" % self.read_byte_register(REGISTER_STATUS))
+        print("Chan 0 = % i   Chan 1 = %i\n" % (self.read_word_register(REGISTER_CHAN0_LOW),
+                                              self.read_word_register(REGISTER_CHAN1_LOW)))
 
     def get_timing(self):
         return self.integration_time
@@ -174,6 +210,7 @@ class Tsl2591(object):
                     ENABLE_POWERON | ENABLE_AEN )  # Enable
 
     def disable(self):
+        self.dump_regs()
         self.bus.write_byte_data(
                     self.sensor_address,
                     COMMAND_BIT | REGISTER_ENABLE,
@@ -210,6 +247,7 @@ class Tsl2591(object):
 if __name__ == '__main__':
 
     tsl = Tsl2591()  # initialize
+    tsl.full_dump_regs()
     full, ir = tsl.get_full_luminosity()  # read raw values (full spectrum and ir spectrum)
     lux = tsl.calculate_lux(full, ir)  # convert raw values to lux
     print (lux, full, ir)
@@ -218,6 +256,7 @@ if __name__ == '__main__':
     def test(int_time=INTEGRATIONTIME_100MS, gain=GAIN_LOW):
         tsl.set_gain(gain)
         tsl.set_timing(int_time)
+        tsl.dump_regs()
         full_test, ir_test = tsl.get_full_luminosity()
         lux_test = tsl.calculate_lux(full_test, ir_test)
         print ('Lux = %f  full = %i  ir = %i' % (lux_test, full_test, ir_test))
