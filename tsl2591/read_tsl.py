@@ -19,6 +19,7 @@ FULLSPECTRUM = 0  # channel 0
 ADDR = 0x29
 
 COMMAND_BIT = 0xA0  # bits 7 and 5 for 'command normal'
+
 SPECIAL_FUNCTION = 0xE0 # bits 7-5 for special function ie interupt control
 # special function flags
 FORCE_INT = 0x04 # forces an interrupt
@@ -97,15 +98,11 @@ class Tsl2591(object):
         self.set_gain(self.gain)
         self.disable()  # to be sure
 
-    def set_timing(self, integration):
-        self.enable()
-        self.integration_time = integration
-        self.bus.write_byte_data(
-                    self.sensor_address,
-                    COMMAND_BIT | REGISTER_CONTROL,
-                    self.integration_time | self.gain
-                    )
-        self.disable()
+    def write_special(self, val): # writes special functions to command register
+        self.bus.write_byte(self.sensor_address, SPECIAL_FUNCTION | val)
+
+    def device_resest(self): # reset chip
+        self.write_byte_register(REGISTER_CONTROL, DEVICE_SRESET)
 
     def read_byte_register(self,register):
         return self.bus.read_byte_data(
@@ -136,12 +133,23 @@ class Tsl2591(object):
                                          self.read_word_register(REGISTER_AIHTL)))
         print("NAILT = %i NAIHT = %i" % (self.read_word_register(REGISTER_NPAILTL),
                                          self.read_word_register(REGISTER_NPAIHTL)))
-        print("Persistenc Filter = %i" % self.read_byte_register(REGISTER_PERSIST_FILTER))
+        print("Persistance Filter = %i" % self.read_byte_register(REGISTER_PERSIST_FILTER))
         print("Package ID = %i Device ID = %i" % (self.read_byte_register(REGISTER_PID),
                                     self.read_byte_register(REGISTER_ID)))
         print("Status register = %i" % self.read_byte_register(REGISTER_STATUS))
         print("Chan 0 = % i   Chan 1 = %i\n" % (self.read_word_register(REGISTER_CHAN0_LOW),
                                               self.read_word_register(REGISTER_CHAN1_LOW)))
+
+
+    def set_timing(self, integration):
+##        self.enable()
+        self.integration_time = integration
+        self.bus.write_byte_data(
+                    self.sensor_address,
+                    COMMAND_BIT | REGISTER_CONTROL,
+                    self.integration_time | self.gain
+                    )
+##        self.disable()
 
     def get_timing(self):
         return self.integration_time
@@ -150,14 +158,14 @@ class Tsl2591(object):
         return self.read_byte_register(REGISTER_CONTROL) & 0b111
 
     def set_gain(self, gain):
-        self.enable()
+##        self.enable()
         self.gain = gain
         self.bus.write_byte_data(
                     self.sensor_address,
                     COMMAND_BIT | REGISTER_CONTROL,
                     self.integration_time | self.gain
                     )
-        self.disable()
+##        self.disable()
 
     def get_gain(self):
         return self.gain
@@ -210,7 +218,8 @@ class Tsl2591(object):
                     ENABLE_POWERON | ENABLE_AEN )  # Enable
 
     def disable(self):
-        self.dump_regs()
+##        print("disable routine")
+##        self.dump_regs()
         self.bus.write_byte_data(
                     self.sensor_address,
                     COMMAND_BIT | REGISTER_ENABLE,
@@ -219,13 +228,19 @@ class Tsl2591(object):
 
     def get_full_luminosity(self):
         self.enable()
-        time.sleep(0.120*self.integration_time+1)  # not sure if we need it "// Wait x ms for ADC to complete"
-        ir = self.bus.read_word_data(
-                    self.sensor_address, COMMAND_BIT | REGISTER_CHAN1_LOW
-                    )
+        time.sleep(0.120*self.integration_time+.2)  # need to delay. This is empirical
+        if not (self.read_byte_register(REGISTER_STATUS) & 1): # did not complete integration
+            print("Integration not complete")
+            self.dump_regs()
+            return
+
         full = self.bus.read_word_data(
                     self.sensor_address, COMMAND_BIT | REGISTER_CHAN0_LOW
                     )
+        ir = self.bus.read_word_data(
+                    self.sensor_address, COMMAND_BIT | REGISTER_CHAN1_LOW
+                    )
+
         self.disable()
         return full, ir
 
@@ -256,9 +271,10 @@ if __name__ == '__main__':
     def test(int_time=INTEGRATIONTIME_100MS, gain=GAIN_LOW):
         tsl.set_gain(gain)
         tsl.set_timing(int_time)
-        tsl.dump_regs()
         full_test, ir_test = tsl.get_full_luminosity()
         lux_test = tsl.calculate_lux(full_test, ir_test)
+        print("*******Test Routine*******")
+        tsl.dump_regs()
         print ('Lux = %f  full = %i  ir = %i' % (lux_test, full_test, ir_test))
         print("integration time = %i" % tsl.get_timing())
         print("gain = %i \n" % tsl.get_gain())        
